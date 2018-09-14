@@ -87,6 +87,12 @@ class MainApplication(tk.Frame):
         cleaned = re.sub(r'\t', ' ', cleaned)
         return str(cleaned.strip())
 
+    def _get_row_id(self, text):
+        try:
+            return int(text)
+        except:
+            return None
+
     # Opening file functions
     def openfile(self):
         if self.file is not None:
@@ -101,7 +107,10 @@ class MainApplication(tk.Frame):
         self.data_df = pd.read_csv(self.file)
         # Clean all the text fields
         self.data_df[self.text_config['text_key']] = self.data_df[self.text_config['text_key']].map(lambda text: self._clean_text(text))
-
+        self.data_df = self.data_df.replace({r'\r': '\n'}, regex=True)
+        self.data_df[self.text_config['note_key']] = self.data_df[self.text_config['note_key']].map(lambda text: self._get_row_id(text))
+        self.data_df = self.data_df.dropna(subset=[self.text_config['note_key']])
+        self.data_df[self.text_config['note_key']] = self.data_df[self.text_config['note_key']].astype(int)
         # Read in all keywords
         self.keywords_fname = '/'.join(self.file.split("/")[:-1]) + '/' + self.keywords_fname
         if os.path.isfile(self.keywords_fname):
@@ -173,12 +182,10 @@ class MainApplication(tk.Frame):
         comparison_dfs = []
 
         for fname in comparison_files:
-            df = pd.read_csv(fname, index_col=0, header=0)
-            df[self.text_config['text_key']] = df[self.text_config['text_key']].map(lambda text: self._clean_text(text))
+            df = pd.read_csv(fname, index_col=0, header=0, error_bad_lines=False)
             comparison_dfs.append(df)
+            self.review_row_ids += df['ROW_ID'].values.tolist()
 
-        for df in comparison_dfs:
-            self.review_row_ids += df[self.text_config['note_key']].unique().tolist()
         self.review_row_ids = list(set(self.review_row_ids))
         # if review df file exists, open.
         if os.path.isfile(self.review_fname):
@@ -298,6 +305,23 @@ class MainApplication(tk.Frame):
             'REVIEWER_LABELS': None
             }
             reviewer_dicts.append(reviewer_dict)
+        if len(reviewer_dicts) < 1:
+            current_results_df = df[(df[self.text_config['note_key']] == current_note_id) & (df['NO_LABELS'] == 1)]
+            for j, row in current_results_df.iterrows():
+                reviewer_dict = {
+                self.text_config['note_key']: current_note_id,
+                self.text_config['text_key']: row[self.text_config['text_key']],
+                'LABELLED_TEXT': None,
+                'START': None,
+                'LABELS': None,
+                'RELATED_TEXTS': None,
+                'RELATED_STARTS': None,
+                'RELATED_LABELS': None,
+                'ANNOTATORS': None,
+                'REVIEWER_LABELS': None
+                }
+                reviewer_dicts.append(reviewer_dict)
+                break
         return reviewer_dicts
 
 
